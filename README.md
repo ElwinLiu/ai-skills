@@ -71,8 +71,6 @@ my-skill/
 ---
 name: my-skill
 description: Summarizes long text into key points
-allowed-tools: [optional tools]
-model: [optional model]
 ---
 # My Skill
 
@@ -85,8 +83,6 @@ Provide clear instructions for Claude...
 
 - **name** (required): Skill identifier (lowercase, numbers, hyphens only, max 64 chars)
 - **description** (required): What the skill does and when to use it (max 1024 chars)
-- **allowed-tools** (optional): Tools AI can use without asking when this skill is active
-- **model** (optional): Specific model to use when this skill is active
 - **content** (required): The markdown instructions that follow the frontmatter
 
 ## Creating Skills
@@ -259,8 +255,6 @@ Creates a new skill.
 - `name` (required): Skill name (lowercase, numbers, hyphens only, max 64 chars)
 - `description` (required): What the skill does (max 1024 chars)
 - `content` (required): The markdown instructions
-- `allowedTools` (optional): Tools AI can use
-- `model` (optional): Specific model for this skill
 
 ### `edit-skill`
 
@@ -271,8 +265,6 @@ Edits an existing skill. Only provide the fields you want to change.
 - `name` (required): The skill name to edit
 - `description` (optional): New description
 - `content` (optional): New instructions
-- `allowedTools` (optional): New allowed tools
-- `model` (optional): New model
 
 ### `remove-skill`
 

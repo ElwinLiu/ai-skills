@@ -25,16 +25,6 @@ export interface ClaudeSkill {
      * What the Skill does and when to use it (max 1024 chars)
      */
     description: string;
-
-    /**
-     * Tools AI can use without asking (optional)
-     */
-    allowedTools?: string[];
-
-    /**
-     * Model to use when this Skill is active (optional)
-     */
-    model?: string;
   };
 
   /**

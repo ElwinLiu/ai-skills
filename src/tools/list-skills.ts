@@ -20,8 +20,6 @@ export default async function tool() {
 **${skill.metadata.name}** (Directory: ${skill.name})
 - Description: ${skill.metadata.description}
 - Path: ${skill.path}
-${skill.metadata.allowedTools ? `- Allowed Tools: ${skill.metadata.allowedTools.join(", ")}` : ""}
-${skill.metadata.model ? `- Model: ${skill.metadata.model}` : ""}
 ${skill.supportingFiles.length > 0 ? `- Supporting Files: ${skill.supportingFiles.length} file(s)` : ""}
   `.trim(),
     )

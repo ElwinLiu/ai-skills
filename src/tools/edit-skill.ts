@@ -1,3 +1,4 @@
+import { Action, Tool } from "@raycast/api";
 import { updateSkill, findSkill } from "../storage";
 
 type Input = {
@@ -15,16 +16,51 @@ type Input = {
    * New content/instructions (optional)
    */
   content?: string;
+};
 
-  /**
-   * New allowed tools (optional)
-   */
-  allowedTools?: string[];
+/**
+ * Confirmation before editing a skill
+ */
+export const confirmation: Tool.Confirmation<Input> = async (input) => {
+  if (!input.name || input.name.trim().length === 0) {
+    return undefined;
+  }
 
-  /**
-   * New model (optional)
-   */
-  model?: string;
+  const existingSkill = await findSkill(input.name);
+
+  if (!existingSkill) {
+    return undefined;
+  }
+
+  if (input.description !== undefined) {
+    if (input.description.trim().length === 0) {
+      return undefined;
+    }
+    if (input.description.length > 1024) {
+      return undefined;
+    }
+  }
+
+  if (input.content !== undefined && input.content.trim().length === 0) {
+    return undefined;
+  }
+
+  const changes = Object.entries({
+    description: input.description,
+    content: input.content ? "(updated)" : undefined,
+  })
+    .filter(([, v]) => v !== undefined)
+    .map(([key, value]) => ({ name: key.charAt(0).toUpperCase() + key.slice(1), value }));
+
+  return {
+    style: Action.Style.Regular,
+    message: `Update Claude Code Skill "${existingSkill.metadata.name}"?`,
+    info: [
+      { name: "Skill Name", value: existingSkill.metadata.name },
+      { name: "Directory", value: existingSkill.path },
+      ...changes,
+    ],
+  };
 };
 
 /**
@@ -63,8 +99,6 @@ export default async function tool(input: Input) {
     const updatedSkill = await updateSkill(input.name, {
       description: input.description,
       content: input.content,
-      allowedTools: input.allowedTools,
-      model: input.model,
     });
 
     if (!updatedSkill) {
@@ -74,9 +108,8 @@ export default async function tool(input: Input) {
     const changes = Object.entries({
       description: input.description,
       content: input.content ? "(updated)" : undefined,
-      allowedTools: input.allowedTools,
-      model: input.model,
     })
+
       .filter(([, v]) => v !== undefined)
       .map(([key, value]) => `  - ${key}: ${value}`)
       .join("\n");

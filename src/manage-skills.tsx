@@ -31,6 +31,7 @@ import {
   getRoutingModel,
   setRoutingModel,
   clearRoutingModel,
+  setEnabledSkillNames,
 } from "./storage";
 import { FAST_MODELS } from "./models";
 import { SkillsFolder } from "./types";
@@ -60,8 +61,14 @@ export default function Command() {
       setSkillsFoldersState(folders);
       setRoutingModelState(model);
 
-      // Load enabled skills
-      const enabled = await getEnabledSkills();
+      let enabled = await getEnabledSkills();
+
+      if (enabled.length === 0 && loadedSkills.length > 0) {
+        const allSkillNames = loadedSkills.map((s) => s.name);
+        await setEnabledSkillNames(allSkillNames);
+        enabled = allSkillNames;
+      }
+
       setEnabledSkills(new Set(enabled));
     } catch (error) {
       await showToast({
@@ -85,12 +92,35 @@ export default function Command() {
         });
       } else {
         await enableSkill(skillName);
-        setEnabledSkills((prev) => new Set(prev).add(skillName));
+        setEnabledSkills((prev) => {
+          const next = new Set(prev);
+          next.add(skillName);
+          return next;
+        });
       }
     } catch (error) {
       await showToast({
         style: Toast.Style.Failure,
         title: "Failed to toggle skill",
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+    }
+  }
+
+  async function setAllSkillsEnabled(nextEnabled: boolean) {
+    try {
+      const skillNames = nextEnabled ? skills.map((s) => s.name) : [];
+      await setEnabledSkillNames(skillNames);
+      setEnabledSkills(new Set(skillNames));
+
+      await showToast({
+        style: Toast.Style.Success,
+        title: nextEnabled ? "All skills enabled" : "All skills disabled",
+      });
+    } catch (error) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Failed to update skills",
         message: error instanceof Error ? error.message : "Unknown error",
       });
     }
@@ -207,6 +237,9 @@ Click **Setup Preferences** below to choose your routing model. You can change t
     );
   }
 
+  const allEnabled = skills.length > 0 && skills.every((skill) => enabledSkills.has(skill.name));
+  const anyEnabled = skills.some((skill) => enabledSkills.has(skill.name));
+
   // Separate skills into enabled and disabled groups
   const enabledSkillsList = skills.filter((skill) => enabledSkills.has(skill.name));
   const disabledSkillsList = skills.filter((skill) => !enabledSkills.has(skill.name));
@@ -239,6 +272,29 @@ Click **Setup Preferences** below to choose your routing model. You can change t
             icon={Icon.Plus}
             shortcut={{ modifiers: ["cmd"], key: "n" }}
           />
+          {!allEnabled && (
+            <Action title="Enable All Skills" onAction={() => setAllSkillsEnabled(true)} icon={Icon.CheckCircle} />
+          )}
+          {anyEnabled && (
+            <Action
+              title="Disable All Skills"
+              style={Action.Style.Destructive}
+              icon={Icon.XMarkCircle}
+              onAction={async () => {
+                const confirmed = await confirmAlert({
+                  title: "Disable All Skills",
+                  message: "Are you sure you want to disable all skills?",
+                  primaryAction: {
+                    title: "Disable All",
+                    style: Alert.ActionStyle.Destructive,
+                  },
+                });
+                if (confirmed) {
+                  await setAllSkillsEnabled(false);
+                }
+              }}
+            />
+          )}
         </ActionPanel>
       }
       searchBarPlaceholder={`${enabledSkillsList.length} Skills · Routed by${modelName}`}
@@ -617,14 +673,7 @@ function CreateSkillForm({ onLoad }: { onLoad: () => void }) {
         message: values.name,
       });
 
-      await createSkill(
-        values.name,
-        values.description,
-        values.content,
-        undefined,
-        undefined,
-        values.folderPath || undefined,
-      );
+      await createSkill(values.name, values.description, values.content, values.folderPath || undefined);
 
       await showToast({
         style: Toast.Style.Success,
@@ -666,15 +715,9 @@ function CreateSkillForm({ onLoad }: { onLoad: () => void }) {
       >
         {folders.map((folder, index) => {
           const folderLabel = folder.label || path.basename(folder.path);
-          const title = `[${folderLabel}] ${folder.path}`;
-          return (
-            <Form.Dropdown.Item
-              key={folder.path}
-              value={folder.path}
-              title={title}
-              accessories={index === 0 ? [{ icon: Icon.Star, text: "Default" }] : []}
-            />
-          );
+          const isDefault = index === 0;
+          const title = `${isDefault ? "★ " : ""}[${folderLabel}] ${folder.path}`;
+          return <Form.Dropdown.Item key={folder.path} value={folder.path} title={title} />;
         })}
       </Form.Dropdown>
       <Form.TextArea
@@ -1290,15 +1333,7 @@ function PreferencesForm({ onRefresh }: { onRefresh: () => void }) {
           <Form.Dropdown.Item
             key={model.id}
             value={model.id}
-            title={`${model.name} ${model.tier === "fastest" ? "⚡⚡" : "⚡"}`}
-            accessories={[
-              {
-                text: model.provider,
-              },
-              {
-                icon: model.tier === "fastest" ? Icon.Lightning : Icon.Zap,
-              },
-            ]}
+            title={`${model.provider} - ${model.name} ${model.tier === "fastest" ? "⚡⚡" : "⚡"}`}
           />
         ))}
       </Form.Dropdown>

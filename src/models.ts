@@ -31,6 +31,11 @@ const FAST_KEYWORDS = {
 };
 
 /**
+ * Keywords that indicate a model is NOT suitable for routing (too slow/expensive)
+ */
+const EXCLUDE_KEYWORDS = ["pro", "thinking", "sonnet", "opus", "turbo", "ultra"];
+
+/**
  * Get provider from model name
  */
 function getProvider(modelName: string): FastModel["provider"] {
@@ -104,8 +109,9 @@ function getSpeedTier(modelName: string): "fastest" | "fast" {
 export function getFastModels(): FastModel[] {
   const models: FastModel[] = [];
 
-  // Get all models from the AI.Model enum
   for (const modelKey in AI.Model) {
+    const modelKeyLower = modelKey.toLowerCase();
+
     // Skip deprecated models (they have @deprecated comments in the type definition)
     if (
       modelKey.startsWith("Anthropic_Claude_3.7") ||
@@ -117,10 +123,15 @@ export function getFastModels(): FastModel[] {
       continue;
     }
 
+    // Skip models with slow/expensive keywords
+    if (EXCLUDE_KEYWORDS.some((kw) => modelKeyLower.includes(kw))) {
+      continue;
+    }
+
     // Check if model name contains fast keywords
     const hasFastKeyword =
-      FAST_KEYWORDS.fastest.some((kw) => modelKey.toLowerCase().includes(kw)) ||
-      FAST_KEYWORDS.fast.some((kw) => modelKey.toLowerCase().includes(kw));
+      FAST_KEYWORDS.fastest.some((kw) => modelKeyLower.includes(kw)) ||
+      FAST_KEYWORDS.fast.some((kw) => modelKeyLower.includes(kw));
 
     if (!hasFastKeyword) {
       continue;
@@ -133,7 +144,7 @@ export function getFastModels(): FastModel[] {
     const model: FastModel = {
       id: modelKey,
       name: name,
-      description: "", // Temporary, will be set after
+      description: "",
       tier,
       provider,
     };
@@ -178,7 +189,11 @@ export function getDefaultModel(): string {
   }
 
   // Fallback to first available model
-  return FAST_MODELS[0]?.id || "Google_Gemini_2.5_Flash_Lite";
+  const model = FAST_MODELS[0]?.id;
+  if (!model) {
+    throw new Error("No fast models available. Please ensure at least one compatible model is enabled.");
+  }
+  return model;
 }
 
 /**

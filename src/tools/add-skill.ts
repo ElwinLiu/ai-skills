@@ -1,4 +1,5 @@
-import { createSkill } from "../storage";
+import { Action, Tool } from "@raycast/api";
+import { createSkill, getSkillsFolderPath } from "../storage";
 
 type Input = {
   /**
@@ -15,16 +16,51 @@ type Input = {
    * The markdown instructions for the skill (the body content after frontmatter)
    */
   content: string;
+};
 
-  /**
-   * Optional: Tools AI can use without asking when this skill is active
-   */
-  allowedTools?: string[];
+/**
+ * Confirmation before creating a skill
+ */
+export const confirmation: Tool.Confirmation<Input> = async (input) => {
+  if (!input.name || input.name.trim().length === 0) {
+    return undefined;
+  }
 
-  /**
-   * Optional: Model to use when this skill is active
-   */
-  model?: string;
+  if (!/^[a-z0-9-]+$/.test(input.name)) {
+    return undefined;
+  }
+
+  if (input.name.length > 64) {
+    return undefined;
+  }
+
+  if (!input.description || input.description.trim().length === 0) {
+    return undefined;
+  }
+
+  if (input.description.length > 1024) {
+    return undefined;
+  }
+
+  if (!input.content || input.content.trim().length === 0) {
+    return undefined;
+  }
+
+  const folderPath = await getSkillsFolderPath();
+
+  return {
+    style: Action.Style.Regular,
+    message: `Create new Claude Code Skill "${input.name}"?`,
+    info: [
+      { name: "Skill Name", value: input.name },
+      {
+        name: "Description",
+        value: input.description.substring(0, 100) + (input.description.length > 100 ? "..." : ""),
+      },
+      { name: "Folder", value: folderPath || "Default skills folder" },
+      { name: "Status", value: "Will be enabled by default" },
+    ],
+  };
 };
 
 /**
@@ -62,12 +98,9 @@ export default async function tool(input: Input) {
   }
 
   try {
-    const skill = await createSkill(input.name, input.description, input.content, input.allowedTools, input.model);
+    const skill = await createSkill(input.name, input.description, input.content);
 
-    const supportingInfo = input.allowedTools ? `\n- Allowed Tools: ${input.allowedTools.join(", ")}` : "";
-    const modelInfo = input.model ? `\n- Model: ${input.model}` : "";
-
-    return `✅ Successfully created Claude Code Skill "${skill.metadata.name}"\n\nDirectory: ${skill.path}${supportingInfo}${modelInfo}\n\nDescription: ${skill.metadata.description}\n\nThe skill is now available for Claude to use automatically when relevant.`;
+    return `✅ Successfully created Claude Code Skill "${skill.metadata.name}"\n\nDirectory: ${skill.path}\n\nDescription: ${skill.metadata.description}\n\nThe skill is enabled by default and available for Claude to use automatically when relevant.`;
   } catch (error) {
     return `❌ Failed to create skill: ${error instanceof Error ? error.message : "Unknown error"}`;
   }

@@ -1,8 +1,10 @@
 import { LocalStorage } from "@raycast/api";
-import fs from "fs";
+import fs from "fs/promises";
 import path from "path";
 import { ClaudeSkill, SkillsFolder, SKILLS_FOLDER_KEY } from "./types";
 import * as YAML from "yaml";
+
+export type { ClaudeSkill };
 
 const ENABLED_SKILLS_KEY = "enabled_skills";
 const ROUTING_MODEL_KEY = "routing_model";
@@ -13,43 +15,42 @@ const ROUTING_MODEL_KEY = "routing_model";
 interface SkillFrontmatter {
   name: string;
   description: string;
-  allowedTools?: string[];
-  model?: string;
-  [key: string]: string | string[] | undefined;
 }
 
 /**
  * Parse YAML frontmatter from SKILL.md content
  */
 function parseSkillMarkdown(content: string): { metadata: SkillFrontmatter; content: string } | null {
-  // Check if content starts with frontmatter delimiter
   if (!content.startsWith("---")) {
     return null;
   }
 
-  // Find the end of frontmatter
   const frontmatterEnd = content.indexOf("---", 3);
   if (frontmatterEnd === -1) {
     return null;
   }
 
-  // Extract frontmatter and content
   const frontmatterText = content.substring(3, frontmatterEnd).trim();
   const markdownContent = content.substring(frontmatterEnd + 3).trim();
 
-  // Parse YAML frontmatter using proper YAML parser
   try {
-    const metadata = YAML.parse(frontmatterText);
+    const parsed = YAML.parse(frontmatterText) as unknown;
 
-    // Convert kebab-case keys to camelCase (e.g., allowed-tools -> allowedTools)
-    const camelCaseMetadata: SkillFrontmatter = metadata as SkillFrontmatter;
-    for (const key in metadata) {
-      const camelKey = key.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
-      camelCaseMetadata[camelKey] = metadata[key];
+    if (!parsed || typeof parsed !== "object") {
+      return null;
     }
 
-    return { metadata: camelCaseMetadata, content: markdownContent };
-  } catch {
+    const record = parsed as Record<string, unknown>;
+    const name = record["name"];
+    const description = record["description"];
+
+    if (typeof name !== "string" || typeof description !== "string") {
+      return null;
+    }
+
+    return { metadata: { name, description }, content: markdownContent };
+  } catch (error) {
+    console.error("Error parsing YAML frontmatter:", error);
     return null;
   }
 }
@@ -67,14 +68,18 @@ export async function getSkillsFolders(): Promise<SkillsFolder[]> {
       if (Array.isArray(parsed)) {
         return parsed;
       }
-    } catch {
+    } catch (error) {
+      console.error("Error parsing stored paths, falling back to single path:", error);
       // Not JSON, treat as single path (backward compatibility)
       return [{ path: storedPaths }];
     }
   }
 
   // Default to personal skills location
-  const homeDir = process.env.HOME || process.env.USERPROFILE || "";
+  const homeDir = process.env.HOME ?? process.env.USERPROFILE;
+  if (!homeDir) {
+    throw new Error("Cannot determine home directory from environment");
+  }
   return [{ path: path.join(homeDir, ".claude", "skills") }];
 }
 
@@ -91,7 +96,11 @@ export async function getSkillsFolderPaths(): Promise<string[]> {
  */
 export async function getSkillsFolderPath(): Promise<string> {
   const paths = await getSkillsFolderPaths();
-  return paths[0] || "";
+  const path = paths[0];
+  if (!path) {
+    throw new Error("No skills folder configured. Please set a skills folder path in settings.");
+  }
+  return path;
 }
 
 /**
@@ -100,8 +109,8 @@ export async function getSkillsFolderPath(): Promise<string> {
 export async function addSkillsFolderPath(folderPath: string, label?: string): Promise<void> {
   const folders = await getSkillsFolders();
 
-  // Avoid duplicates
-  if (!folders.find((f) => f.path === folderPath)) {
+  // Avoid duplicates (case-insensitive for macOS compatibility)
+  if (!folders.find((f) => f.path.toLowerCase() === folderPath.toLowerCase())) {
     folders.push({ path: folderPath, label });
     await LocalStorage.setItem(SKILLS_FOLDER_KEY, JSON.stringify(folders));
   }
@@ -112,7 +121,7 @@ export async function addSkillsFolderPath(folderPath: string, label?: string): P
  */
 export async function removeSkillsFolderPath(folderPath: string): Promise<void> {
   const folders = await getSkillsFolders();
-  const filtered = folders.filter((f) => f.path !== folderPath);
+  const filtered = folders.filter((f) => f.path.toLowerCase() !== folderPath.toLowerCase());
 
   await LocalStorage.setItem(SKILLS_FOLDER_KEY, JSON.stringify(filtered));
 }
@@ -122,7 +131,7 @@ export async function removeSkillsFolderPath(folderPath: string): Promise<void> 
  */
 export async function updateSkillsFolderPath(oldPath: string, newPath: string, label?: string): Promise<boolean> {
   const folders = await getSkillsFolders();
-  const index = folders.findIndex((f) => f.path === oldPath);
+  const index = folders.findIndex((f) => f.path.toLowerCase() === oldPath.toLowerCase());
 
   if (index === -1) {
     return false;
@@ -150,11 +159,13 @@ export async function getAllSkills(): Promise<ClaudeSkill[]> {
 
     for (const skillsFolder of skillsFolders) {
       // Check if folder exists
-      if (!fs.existsSync(skillsFolder)) {
+      try {
+        await fs.access(skillsFolder);
+      } catch {
         continue;
       }
 
-      const entries = fs.readdirSync(skillsFolder, { withFileTypes: true });
+      const entries = await fs.readdir(skillsFolder, { withFileTypes: true });
 
       for (const entry of entries) {
         if (!entry.isDirectory()) continue;
@@ -163,17 +174,21 @@ export async function getAllSkills(): Promise<ClaudeSkill[]> {
         const skillMdPath = path.join(skillPath, "SKILL.md");
 
         // Check if SKILL.md exists (case-sensitive)
-        if (!fs.existsSync(skillMdPath)) {
+        try {
+          await fs.access(skillMdPath);
+        } catch {
           // Try lowercase version
           const lowerCasePath = path.join(skillPath, "skill.md");
-          if (fs.existsSync(lowerCasePath)) {
+          try {
+            await fs.access(lowerCasePath);
             continue; // Skip invalid skill names
+          } catch {
+            continue;
           }
-          continue;
         }
 
         // Read SKILL.md
-        const content = fs.readFileSync(skillMdPath, "utf-8");
+        const content = await fs.readFile(skillMdPath, "utf-8");
         const parsed = parseSkillMarkdown(content);
 
         if (!parsed || !parsed.metadata.name || !parsed.metadata.description) {
@@ -181,15 +196,29 @@ export async function getAllSkills(): Promise<ClaudeSkill[]> {
         }
 
         // List supporting files (all files except SKILL.md)
-        const allFiles = fs.readdirSync(skillPath);
-        const supportingFiles = allFiles.filter(
-          (f) => f !== "SKILL.md" && fs.statSync(path.join(skillPath, f)).isFile(),
-        );
+        const allFiles = await fs.readdir(skillPath);
+        const supportingFiles: string[] = [];
+
+        for (const f of allFiles) {
+          if (f !== "SKILL.md") {
+            try {
+              const stat = await fs.stat(path.join(skillPath, f));
+              if (stat.isFile()) {
+                supportingFiles.push(f);
+              }
+            } catch {
+              // Skip files that can't be accessed
+            }
+          }
+        }
 
         skills.push({
           name: entry.name,
           path: skillPath,
-          metadata: parsed.metadata,
+          metadata: {
+            name: parsed.metadata.name,
+            description: parsed.metadata.description,
+          },
           content: parsed.content,
           supportingFiles,
           skillMdPath,
@@ -198,7 +227,8 @@ export async function getAllSkills(): Promise<ClaudeSkill[]> {
     }
 
     return skills;
-  } catch {
+  } catch (error) {
+    console.error("Error loading skills:", error);
     return [];
   }
 }
@@ -223,11 +253,13 @@ export async function readSupportingFile(skillName: string, fileName: string): P
 
   const filePath = path.join(skill.path, fileName);
 
-  if (!fs.existsSync(filePath)) {
+  try {
+    await fs.access(filePath);
+  } catch {
     throw new Error(`File "${fileName}" not found in skill "${skillName}"`);
   }
 
-  return fs.readFileSync(filePath, "utf-8");
+  return await fs.readFile(filePath, "utf-8");
 }
 
 /**
@@ -237,31 +269,20 @@ export async function createSkill(
   name: string,
   description: string,
   content: string,
-  allowedTools?: string[],
-  model?: string,
   folderPath?: string,
 ): Promise<ClaudeSkill> {
   const skillsFolder = folderPath || (await getSkillsFolderPath());
 
   // Create skill directory
   const skillPath = path.join(skillsFolder, name);
-  fs.mkdirSync(skillPath, { recursive: true });
+  await fs.mkdir(skillPath, { recursive: true });
 
-  // Generate SKILL.md content with optional fields
-  let frontmatter = `---\nname: ${name}\ndescription: ${description}`;
-
-  if (allowedTools && allowedTools.length > 0) {
-    frontmatter += `\nallowed-tools: ${JSON.stringify(allowedTools)}`;
-  }
-
-  if (model) {
-    frontmatter += `\nmodel: ${model}`;
-  }
-
-  frontmatter += `\n---\n\n`;
+  const frontmatter = `---\n${YAML.stringify({ name, description }).trimEnd()}\n---\n\n`;
 
   const skillMdPath = path.join(skillPath, "SKILL.md");
-  fs.writeFileSync(skillMdPath, frontmatter + content, "utf-8");
+  await fs.writeFile(skillMdPath, frontmatter + content, "utf-8");
+
+  await enableSkill(name);
 
   return {
     name,
@@ -269,8 +290,6 @@ export async function createSkill(
     metadata: {
       name,
       description,
-      allowedTools,
-      model,
     },
     content,
     supportingFiles: [],
@@ -286,8 +305,6 @@ export async function updateSkill(
   updates: {
     description?: string;
     content?: string;
-    allowedTools?: string[];
-    model?: string;
   },
 ): Promise<ClaudeSkill | null> {
   const skill = await findSkill(name);
@@ -297,7 +314,7 @@ export async function updateSkill(
   }
 
   // Read current content
-  const currentContent = fs.readFileSync(skill.skillMdPath, "utf-8");
+  const currentContent = await fs.readFile(skill.skillMdPath, "utf-8");
   const parsed = parseSkillMarkdown(currentContent);
 
   if (!parsed) {
@@ -310,21 +327,10 @@ export async function updateSkill(
     ...updates,
   };
 
-  // Regenerate SKILL.md with optional fields
-  let frontmatter = `---\nname: ${metadata.name}\ndescription: ${metadata.description}`;
-
-  if (metadata.allowedTools && metadata.allowedTools.length > 0) {
-    frontmatter += `\nallowed-tools: ${JSON.stringify(metadata.allowedTools)}`;
-  }
-
-  if (metadata.model) {
-    frontmatter += `\nmodel: ${metadata.model}`;
-  }
-
-  frontmatter += `\n---\n\n`;
+  const frontmatter = `---\n${YAML.stringify({ name: metadata.name, description: metadata.description }).trimEnd()}\n---\n\n`;
 
   const newContent = updates.content ?? parsed.content;
-  fs.writeFileSync(skill.skillMdPath, frontmatter + newContent, "utf-8");
+  await fs.writeFile(skill.skillMdPath, frontmatter + newContent, "utf-8");
 
   return {
     ...skill,
@@ -344,7 +350,7 @@ export async function deleteSkill(name: string): Promise<boolean> {
   }
 
   // Remove the entire skill directory
-  fs.rmSync(skill.path, { recursive: true, force: true });
+  await fs.rm(skill.path, { recursive: true, force: true });
 
   return true;
 }
@@ -357,7 +363,8 @@ export async function getEnabledSkills(): Promise<string[]> {
   if (enabled) {
     try {
       return JSON.parse(enabled);
-    } catch {
+    } catch (error) {
+      console.error("Error parsing enabled skills:", error);
       return [];
     }
   }
@@ -390,6 +397,11 @@ export async function disableSkill(skillName: string): Promise<void> {
   const enabled = await getEnabledSkills();
   const filtered = enabled.filter((name) => name !== skillName);
   await LocalStorage.setItem(ENABLED_SKILLS_KEY, JSON.stringify(filtered));
+}
+
+export async function setEnabledSkillNames(skillNames: string[]): Promise<void> {
+  const unique = Array.from(new Set(skillNames));
+  await LocalStorage.setItem(ENABLED_SKILLS_KEY, JSON.stringify(unique));
 }
 
 /**

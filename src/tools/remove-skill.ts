@@ -1,4 +1,4 @@
-import { Tool } from "@raycast/api";
+import { Action, Tool } from "@raycast/api";
 import { deleteSkill, findSkill } from "../storage";
 
 type Input = {
@@ -19,7 +19,7 @@ export const confirmation: Tool.Confirmation<Input> = async (input) => {
   }
 
   return {
-    style: Tool.Action.Style.Destructive,
+    style: Action.Style.Destructive,
     message: `Are you sure you want to delete the Claude Code Skill "${skill.metadata.name}"?`,
     info: [
       { name: "Skill Name", value: skill.metadata.name },
