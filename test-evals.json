@@ -1,0 +1,17 @@
+{
+  "ai": {
+    "evals": [
+      {
+        "input": "@ai-skills List all my skills",
+        "mocks": {
+          "list-skills": "Test output"
+        },
+        "expected": [
+          {
+            "callsTool": "list-skills"
+          }
+        ]
+      }
+    ]
+  }
+}

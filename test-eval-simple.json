@@ -1,0 +1,14 @@
+{
+  "ai": {
+    "evals": [
+      {
+        "input": "@ai-skills List all my skills",
+        "expected": [
+          {
+            "callsTool": "list-skills"
+          }
+        ]
+      }
+    ]
+  }
+}
