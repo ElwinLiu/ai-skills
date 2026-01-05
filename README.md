@@ -45,17 +45,6 @@ For developers wanting to work on the extension source code:
 - **Semantic Routing**: Uses fast AI models to intelligently select the most relevant skill for your request
 - **Enable/Disable Skills**: Toggle skills on/off to control which ones are available in AI Chat
 
-2. Install dependencies:
-
-   ```bash
-   npm install
-   ```
-
-3. Start development mode:
-   ```bash
-   npm run dev
-   ```
-
 ## Usage
 
 ### Via AI Chat (Recommended)
