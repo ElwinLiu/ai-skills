@@ -12,11 +12,11 @@
     "Productivity"
   ],
   "screenshots": [
-    "media/manage-skills-main-view.png",
-    "media/add-skill-confirm.png",
-    "media/skill-detail-view.png",
-    "media/edit-skill-interface.png",
-    "media/ai-chat-skill-demo.png"
+    "metadata/manage-skills-main-view.png",
+    "metadata/add-skill-confirm.png",
+    "metadata/skill-detail-view.png",
+    "metadata/edit-skill-interface.png",
+    "metadata/ai-chat-skill-demo.png"
   ],
   "license": "MIT",
   "commands": [
