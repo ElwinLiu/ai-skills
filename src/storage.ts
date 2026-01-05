@@ -75,12 +75,12 @@ export async function getSkillsFolders(): Promise<SkillsFolder[]> {
     }
   }
 
-  // Default to personal skills location
-  const homeDir = process.env.HOME ?? process.env.USERPROFILE;
-  if (!homeDir) {
-    throw new Error("Cannot determine home directory from environment");
+  const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? "";
+  if (homeDir) {
+    return [{ path: path.join(homeDir, ".claude", "skills") }];
   }
-  return [{ path: path.join(homeDir, ".claude", "skills") }];
+
+  return [];
 }
 
 /**
@@ -96,11 +96,17 @@ export async function getSkillsFolderPaths(): Promise<string[]> {
  */
 export async function getSkillsFolderPath(): Promise<string> {
   const paths = await getSkillsFolderPaths();
-  const path = paths[0];
-  if (!path) {
-    throw new Error("No skills folder configured. Please set a skills folder path in settings.");
+  const firstPath = paths[0];
+
+  if (!firstPath) {
+    const homeDir = process.env.HOME ?? process.env.USERPROFILE ?? "";
+    if (homeDir) {
+      return path.join(homeDir, ".claude", "skills");
+    }
+    return "";
   }
-  return path;
+
+  return firstPath;
 }
 
 /**
@@ -273,6 +279,10 @@ export async function createSkill(
 ): Promise<ClaudeSkill> {
   const skillsFolder = folderPath || (await getSkillsFolderPath());
 
+  if (!skillsFolder) {
+    throw new Error("No skills folder configured. Please configure a skills folder before creating skills.");
+  }
+
   // Create skill directory
   const skillPath = path.join(skillsFolder, name);
   await fs.mkdir(skillPath, { recursive: true });
@@ -303,6 +313,7 @@ export async function createSkill(
 export async function updateSkill(
   name: string,
   updates: {
+    newName?: string;
     description?: string;
     content?: string;
   },
@@ -313,7 +324,23 @@ export async function updateSkill(
     return null;
   }
 
-  // Read current content
+  if (updates.newName && updates.newName !== name) {
+    const enabledSkills = await getEnabledSkills();
+    if (enabledSkills.includes(name)) {
+      const filtered = enabledSkills.filter((n) => n !== name);
+      filtered.push(updates.newName);
+      await LocalStorage.setItem(ENABLED_SKILLS_KEY, JSON.stringify(filtered));
+    }
+
+    const newSkillPath = path.join(path.dirname(skill.path), updates.newName);
+    await fs.rename(skill.path, newSkillPath);
+
+    skill.path = newSkillPath;
+    skill.skillMdPath = path.join(newSkillPath, "SKILL.md");
+    skill.name = updates.newName;
+    skill.metadata.name = updates.newName;
+  }
+
   const currentContent = await fs.readFile(skill.skillMdPath, "utf-8");
   const parsed = parseSkillMarkdown(currentContent);
 
@@ -321,7 +348,6 @@ export async function updateSkill(
     return null;
   }
 
-  // Update metadata, preserving existing values if not provided
   const metadata = {
     ...skill.metadata,
     ...updates,

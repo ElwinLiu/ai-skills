@@ -126,74 +126,6 @@ export default function Command() {
     }
   }
 
-  if (skills.length === 0 && !isLoading) {
-    const foldersList = skillsFolders.map((f, i) => `  ${i + 1}. ${f}`).join("\n") || "  No folders configured";
-
-    const emptyStateMarkdown = `## No AI Skills Found
-
-No skills found in your configured folders:
-${foldersList}
-
-### What are AI Skills?
-
-AI Skills are markdown files (\`SKILL.md\`) that teach AI how to do specific tasks. Each skill is a directory containing a \`SKILL.md\` file with YAML frontmatter.
-
-### Quick Start
-
-1. **Configure your skills folders** (if needed)
-   - Default: \`~/.claude/skills/\`
-   - Project: \`.claude/skills/\`
-   - Or any custom folder
-   - You can configure multiple folders!
-
-2. **Create your first skill**
-   - Open AI Chat in Raycast
-   - Type: \`@claude-code-skills Create a skill that summarizes text\`
-   - Or create a directory with a \`SKILL.md\` file manually
-
-### Example Skill Structure
-
-\`\`\`
-my-skill/
-└── SKILL.md
-\`\`\`
-
-**SKILL.md content:**
-
-\`\`\`yaml
----
-name: my-skill
-description: Summarizes long text into key points
----
-
-# My Skill
-
-## Instructions
-Provide clear instructions for Claude...
-\`\`\`
-
-### Need Help?
-
-- [AI Skills Documentation](https://code.claude.com/docs/en/skills)
-- Use \`@claude-code-skills\` in AI Chat to manage skills`;
-
-    return (
-      <Detail
-        markdown={emptyStateMarkdown}
-        actions={
-          <ActionPanel>
-            <Action.Push
-              title="Manage Skills Folders"
-              target={<ManageSkillsFoldersList onRefresh={loadSkills} />}
-              icon={Icon.List}
-            />
-            <Action.Push title="Create Skill" target={<CreateSkillForm onLoad={loadSkills} />} icon={Icon.Plus} />
-          </ActionPanel>
-        }
-      />
-    );
-  }
-
   // Show setup message if no routing model is configured
   if (!routingModel && !isLoading) {
     const setupMarkdown = `# Setup Required
@@ -231,6 +163,80 @@ Click **Setup Preferences** below to choose your routing model. You can change t
               target={<ManageSkillsFoldersList onRefresh={loadSkills} />}
               icon={Icon.List}
             />
+          </ActionPanel>
+        }
+      />
+    );
+  }
+
+  if (skills.length === 0 && !isLoading) {
+    const foldersList = skillsFolders.map((f, i) => `  ${i + 1}. ${f}`).join("\n") || "  No folders configured";
+
+    const emptyStateMarkdown = `## No AI Skills Found
+
+No skills found in your configured folders:
+${foldersList}
+
+### What are AI Skills?
+
+AI Skills are markdown files (\`SKILL.md\`) that teach AI how to do specific tasks. Each skill is a directory containing a \`SKILL.md\` file with YAML frontmatter.
+
+### Quick Start
+
+1. **Configure your skills folders** (if needed)
+   - Default: \`~/.claude/skills/\`
+   - Or any custom folder
+   - You can configure multiple folders!
+
+2. **Create your first skill**
+   - Open AI Chat in Raycast
+   - Type: \`Create a skill that summarizes text @ai-skills \`
+   - Or create a directory with a \`SKILL.md\` file manually
+
+### Example Skill Structure
+
+\`\`\`
+my-skill/
+└── SKILL.md
+\`\`\`
+
+**SKILL.md content:**
+
+\`\`\`yaml
+---
+name: my-skill
+description: Summarizes long text into key points
+---
+
+# My Skill
+
+## Instructions
+Provide clear instructions for Claude...
+\`\`\`
+
+### Need Help?
+
+- [AI Skills Documentation](https://code.claude.com/docs/en/skills)
+- Use \`@ai-skills\` in AI Chat to manage skills`;
+
+    return (
+      <Detail
+        markdown={emptyStateMarkdown}
+        actions={
+          <ActionPanel>
+            <Action.Push
+              title="Manage Skills Folders"
+              target={<ManageSkillsFoldersList onRefresh={loadSkills} />}
+              icon={Icon.List}
+              shortcut={{ modifiers: ["cmd"], key: "f" }}
+            />
+            <Action.Push
+              title="Model"
+              target={<PreferencesForm onRefresh={() => setRefreshKey((prev) => prev + 1)} />}
+              icon={Icon.Gear}
+              shortcut={{ modifiers: ["cmd"], key: "m" }}
+            />
+            <Action.Push title="Create Skill" target={<CreateSkillForm onLoad={loadSkills} />} icon={Icon.Plus} />
           </ActionPanel>
         }
       />
@@ -739,7 +745,7 @@ function CreateSkillForm({ onLoad }: { onLoad: () => void }) {
 function EditSkillForm({ skill, onRefresh }: { skill: ClaudeSkill; onRefresh: () => void }) {
   const { pop } = useNavigation();
 
-  async function handleSubmit(values: { description: string; content: string }) {
+  async function handleSubmit(values: { name: string; description: string; content: string }) {
     try {
       await showToast({
         style: Toast.Style.Animated,
@@ -748,6 +754,7 @@ function EditSkillForm({ skill, onRefresh }: { skill: ClaudeSkill; onRefresh: ()
       });
 
       await updateSkill(skill.name, {
+        newName: values.name !== skill.name ? values.name : undefined,
         description: values.description,
         content: values.content,
       });
@@ -755,7 +762,7 @@ function EditSkillForm({ skill, onRefresh }: { skill: ClaudeSkill; onRefresh: ()
       await showToast({
         style: Toast.Style.Success,
         title: "Skill updated",
-        message: `"${skill.metadata.name}" has been updated.`,
+        message: `"${values.name}" has been updated.`,
       });
 
       pop();
@@ -778,6 +785,13 @@ function EditSkillForm({ skill, onRefresh }: { skill: ClaudeSkill; onRefresh: ()
       }
     >
       <Form.Description text={`Editing skill: ${skill.metadata.name}`} />
+      <Form.TextField
+        id="name"
+        title="Skill Name"
+        defaultValue={skill.name}
+        placeholder="my-awesome-skill"
+        info="Lowercase letters, numbers, and hyphens only (max 64 chars). Leave unchanged to keep current name."
+      />
       <Form.TextArea
         id="description"
         title="Description"

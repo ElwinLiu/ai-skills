@@ -1,6 +1,40 @@
 # AI Skills Extension
 
-Manage your AI Skills for Claude Code. Configure your skills folders, create new SKILL.md files, and manage your skills with a beautiful UI.
+Create and manage custom AI Skills for Raycast AI. Define skills with custom instructions, use semantic routing for automatic skill selection, and organize skills across multiple folders.
+
+## Quick Start (Store Users)
+
+1. **Install** the extension from the Raycast Store
+2. **Open** Raycast and start AI Chat (Cmd + I or type "AI Chat")
+3. **Type** `@ai-skills` followed by your request, for example:
+   - `@ai-skills List all my skills`
+   - `@ai-skills Create a skill that summarizes text`
+   - `@ai-skills Add ~/.claude/skills as a skills folder`
+4. **Or open** "Manage Skills" command to manage skills via the UI
+
+That's it! Start creating and using your custom AI Skills.
+
+## Development Installation
+
+For developers wanting to work on the extension source code:
+
+1. Open the terminal and navigate to the extension directory:
+
+   ```bash
+   cd ai-skills
+   ```
+
+2. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+3. Start development mode:
+
+   ```bash
+   npm run dev
+   ```
 
 ## Features
 
@@ -10,14 +44,6 @@ Manage your AI Skills for Claude Code. Configure your skills folders, create new
 - **Multiple Skills Folders**: Organize skills across multiple folders (personal, project-specific, etc.)
 - **Semantic Routing**: Uses fast AI models to intelligently select the most relevant skill for your request
 - **Enable/Disable Skills**: Toggle skills on/off to control which ones are available in AI Chat
-
-## Installation
-
-1. Open the terminal and navigate to the extension directory:
-
-   ```bash
-   cd ai-skills
-   ```
 
 2. Install dependencies:
 

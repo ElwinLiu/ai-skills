@@ -8,6 +8,11 @@ type Input = {
   name: string;
 
   /**
+   * New name for the skill (optional, lowercase, numbers, and hyphens only, max 64 chars)
+   */
+  newName?: string;
+
+  /**
    * New description (optional)
    */
   description?: string;
@@ -32,6 +37,21 @@ export const confirmation: Tool.Confirmation<Input> = async (input) => {
     return undefined;
   }
 
+  if (input.newName !== undefined) {
+    if (input.newName.trim().length === 0) {
+      return undefined;
+    }
+    if (!/^[a-z0-9-]+$/.test(input.newName)) {
+      return undefined;
+    }
+    if (input.newName.length > 64) {
+      return undefined;
+    }
+    if (input.newName === input.name) {
+      return undefined;
+    }
+  }
+
   if (input.description !== undefined) {
     if (input.description.trim().length === 0) {
       return undefined;
@@ -46,6 +66,7 @@ export const confirmation: Tool.Confirmation<Input> = async (input) => {
   }
 
   const changes = Object.entries({
+    newName: input.newName ? `${existingSkill.metadata.name} → ${input.newName}` : undefined,
     description: input.description,
     content: input.content ? "(updated)" : undefined,
   })
@@ -69,7 +90,6 @@ export const confirmation: Tool.Confirmation<Input> = async (input) => {
  * This tool updates the SKILL.md file of an existing skill. Only provide the fields you want to change.
  */
 export default async function tool(input: Input) {
-  // Validate skill name
   if (!input.name || input.name.trim().length === 0) {
     return "❌ Skill name is required.";
   }
@@ -80,7 +100,26 @@ export default async function tool(input: Input) {
     return `❌ Skill "${input.name}" not found. Use list-skills to see all available skills.`;
   }
 
-  // Validate description if provided
+  if (input.newName !== undefined) {
+    if (input.newName.trim().length === 0) {
+      return "❌ New skill name cannot be empty.";
+    }
+    if (!/^[a-z0-9-]+$/.test(input.newName)) {
+      return `❌ Invalid new skill name "${input.newName}". Skill names must use lowercase letters, numbers, and hyphens only (max 64 characters).`;
+    }
+    if (input.newName.length > 64) {
+      return `❌ New skill name too long. Maximum 64 characters allowed.`;
+    }
+    if (input.newName === input.name) {
+      return `❌ New skill name is the same as the current name.`;
+    }
+
+    const existingWithNewName = await findSkill(input.newName);
+    if (existingWithNewName && existingWithNewName.path !== existingSkill.path) {
+      return `❌ A skill with the name "${input.newName}" already exists.`;
+    }
+  }
+
   if (input.description !== undefined) {
     if (input.description.trim().length === 0) {
       return "❌ Description cannot be empty.";
@@ -90,13 +129,13 @@ export default async function tool(input: Input) {
     }
   }
 
-  // Validate content if provided
   if (input.content !== undefined && input.content.trim().length === 0) {
     return "❌ Content cannot be empty.";
   }
 
   try {
     const updatedSkill = await updateSkill(input.name, {
+      newName: input.newName,
       description: input.description,
       content: input.content,
     });
@@ -106,10 +145,10 @@ export default async function tool(input: Input) {
     }
 
     const changes = Object.entries({
+      newName: input.newName ? `${input.name} → ${input.newName}` : undefined,
       description: input.description,
       content: input.content ? "(updated)" : undefined,
     })
-
       .filter(([, v]) => v !== undefined)
       .map(([key, value]) => `  - ${key}: ${value}`)
       .join("\n");
